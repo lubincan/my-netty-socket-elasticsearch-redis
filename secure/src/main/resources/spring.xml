@@ -1,0 +1,130 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:ws="http://jax-ws.dev.java.net/spring/core" xmlns:wss="http://jax-ws.dev.java.net/spring/servlet"
+	xmlns:aop="http://www.springframework.org/schema/aop" xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:dwr="http://www.directwebremoting.org/schema/spring-dwr"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:task="http://www.springframework.org/schema/task" xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xmlns:cache="http://www.springframework.org/schema/cache" xmlns:jee="http://www.springframework.org/schema/jee"
+	xsi:schemaLocation="
+	http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc-3.1.xsd
+	http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.1.xsd
+	http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-3.1.xsd 
+	http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-3.1.xsd
+	http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util-3.1.xsd
+	http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.1.xsd
+	http://www.springframework.org/schema/cache http://www.springframework.org/schema/cache/spring-cache-3.1.xsd
+	http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task-3.1.xsd
+	http://jax-ws.dev.java.net/spring/core http://jax-ws.dev.java.net/spring/core.xsd 
+	http://jax-ws.dev.java.net/spring/servlet http://jax-ws.dev.java.net/spring/servlet.xsd
+	http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task-3.1.xsd
+	http://www.springframework.org/schema/jee http://www.springframework.org/schema/jee/spring-jee-3.1.xsd
+	http://cxf.apache.org/jaxws http://cxf.apache.org/schemas/jaxws.xsd
+	http://cxf.apache.org/transports/http/configuration http://cxf.apache.org/schemas/configuration/http-conf.xsd ">
+	
+	<!-- SpringMVC -->
+	<context:annotation-config />
+	<mvc:annotation-driven />
+	<context:component-scan base-package="com.ztbrothers.secure"></context:component-scan>
+
+  <!--使用bean定义一个Interceptor，直接定义在mvc:interceptors根下面的Interceptor将拦截所有的请求 -->
+	<!-- 定义在mvc:interceptor下面的表示是对特定的请求才进行拦截的  -->
+ <!-- 	<mvc:interceptors>
+		<mvc:interceptor>
+			<mvc:mapping path="/sys/**/*" /> 
+			<mvc:mapping path="/manage/**/*" /> 
+			<mvc:mapping path="/index/*" />
+			<mvc:mapping path="/index" />
+			<mvc:mapping path="/index.*" />
+			<mvc:mapping path="conf/*" />
+			<mvc:mapping path="themes/**/*" />
+			<bean class="com.shenzhenair.ecargo.apron.support.interceptor.SpringMvcInterceptor" />
+		</mvc:interceptor>
+	</mvc:interceptors> -->
+
+	<!-- AOP -->
+  <!-- 	<aop:aspectj-autoproxy />-->
+	<context:property-placeholder location="classpath*:configuration-dev.properties" />
+	<!-- <tx:annotation-driven transaction-manager="transactionManager" proxy-target-class="true" /> -->
+		
+		<!-- redis configuration -->
+	<bean id="jedisPoolConfig" class="redis.clients.jedis.JedisPoolConfig">
+		<property name="maxActive" value="200" />
+		<property name="maxIdle" value="200" />
+		<property name="minIdle" value="10" />
+		<property name="maxWait" value="20000" />
+		<property name="testOnBorrow" value="true" />
+		<property name="testOnReturn" value="true" />
+	</bean>
+	
+	<bean id="redisConnectionFactory"
+		class="org.springframework.data.redis.connection.jedis.JedisConnectionFactory"
+		destroy-method="destroy" p:host-name="${REDIS.URL}" p:password="${REDIS.PWD}"
+		p:port="${REDIS.PORT}" p:poolConfig-ref="jedisPoolConfig" p:use-pool="true"
+		p:database="2" p:timeout="100000" />
+		
+	<bean id="redisTemplate" class="org.springframework.data.redis.core.RedisTemplate"
+		p:connection-factory-ref="redisConnectionFactory">
+	</bean>
+	<bean id="stringRedisTemplate" class="org.springframework.data.redis.core.StringRedisTemplate"
+		p:connection-factory-ref="redisConnectionFactory">
+	</bean>
+	
+	<bean id="serialization" class="org.springframework.data.redis.serializer.JdkSerializationRedisSerializer" />  
+	<bean id="redisPush" class="com.ztbrothers.secure.support.redis.dao.RedisPushDAOImpl">  
+        <property name="redisTemplate" ref="redisTemplate" />  
+        <property name="channel" value="zt_metron" />  
+   </bean>
+  
+  <bean id="messageDelegateListener" class="com.ztbrothers.secure.support.redis.handle.MetronMessageListener" />
+	 <bean id="messageListener" class="org.springframework.data.redis.listener.adapter.MessageListenerAdapter">  
+          <property name="delegate" ref="messageDelegateListener" />  
+          <property name="serializer" ref="serialization" />  
+    </bean>  
+	
+	
+	<bean id="riskMessageDelegateListener" class="com.ztbrothers.secure.support.redis.handle.MetronRiskMessageListener" />
+	 <bean id="riskmessageListener" class="org.springframework.data.redis.listener.adapter.MessageListenerAdapter">  
+          <property name="delegate" ref="riskMessageDelegateListener" />  
+          <property name="serializer" ref="serialization" /> 
+    </bean>
+    
+	 <bean id="redisContainer" class="org.springframework.data.redis.listener.RedisMessageListenerContainer" destroy-method="destroy">  
+            <property name="connectionFactory" ref="redisConnectionFactory"/>  
+            <property name="messageListeners">  
+                <!-- map of listeners and their associated topics (channels or/and patterns) -->  
+                <map>  
+                    <entry key-ref="messageListener">  
+                        <bean class="org.springframework.data.redis.listener.ChannelTopic">  
+                            <constructor-arg value="zt_metron" /> 
+                        </bean>  
+                    </entry> 
+                    <entry key-ref="riskmessageListener">  
+                       <bean class="org.springframework.data.redis.listener.ChannelTopic">  
+                           <constructor-arg value="zt_risk" /> 
+                       </bean>  
+                   </entry>  
+                </map>  
+            </property>  
+    </bean>  
+
+	<task:scheduler id="scheduler" pool-size="20" />
+	<task:annotation-driven /> 
+	<task:scheduler id="scheduler" pool-size="10" />
+	<task:scheduled-tasks scheduler="scheduler" >  
+    <task:scheduled  ref="pushRedisMsg" method="timerPushRedis" cron="5/2 * * * * ?"/>  
+  </task:scheduled-tasks>
+	 
+	 <!-- elasticsearch restClient -->
+	 <bean id="esRestClient" class="com.ztbrothers.secure.support.elasticsearch.restclient.EsRestClient">
+	 <!-- 	<property name="esUser"></property>
+	 	<property name="esPassword"></property> -->
+	 	<property name="esHost" value="192.168.10.118"/>
+	 	<property name="esSport" value="9200"/>
+	<!--  	<property name="esConnectTimeout" value="5000"/>
+	 	<property name="esSocketTimeout" value="30000"/>
+	 	<property name="esRetryTimeoutMillis" value="30000"/>
+	 	<property name="esThreadCount" value="1"/> -->
+	 	
+	 </bean>
+</beans>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+        <meta charset="utf-8" />
+
+        <title>Elasticsearch数据监控</title>
+
+        <link href="bootstrap.css" rel="stylesheet">
+
+	<style>
+		body {
+			padding:20px;
+		}
+		#console {
+			height: 400px;
+			overflow: auto;
+		}
+		.username-msg {color:orange;}
+		.connect-msg {color:green;}
+		.disconnect-msg {color:red;}
+		.send-msg {color:#888}
+	</style>
+
+
+	<script src="js/socket.io/socket.io.js"></script>
+        <script src="js/moment.min.js"></script>
+        <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+
+	<script>
+
+    var userName = '[user_account_' + Math.floor((Math.random()*1000)+1)+"]";
+		var socket =  io.connect('http://localhost:9092');
+
+		/**监听连接事件*/
+		function socketConnect() {
+			socket.on('connect', function() {
+				output('<span class="connect-msg">客户端已经成功连接到消息服务器!</span>');
+				$("#userId").html("当前账号："+userName);
+			});
+		
+		}
+		
+		 /**订阅攻击详情*/
+		 function subscibe() {
+			 socket.on('chatevent', function(data) {
+					output('<span class="username-msg">' + data.userName + ':</span> ' + data.message);
+				});
+     };
+     
+
+		 /**取消订阅攻击详情*/
+		 function unsubscibe(){
+			 socket.off('chatevent');
+		 }
+		 
+     /**订阅受攻击的网络威胁总数量*/
+		 function subTotalLog() {
+			 socket.on('totalLog', function(data) {
+			$("#title").html("局域网受攻击数量："+data);
+					});
+		 }
+ 
+		 /**监听连接断开事件*/
+		 function onDisconnect() {
+			 socket.on('disconnect', function() {
+					output('<span class="disconnect-msg">客户端已经和服务端断开连接!</span>');
+				});
+		 }
+		 
+		  /**断开连接*/
+	    function sendDisconnect() {
+	          socket.disconnect();
+	      }
+		 
+               
+    /**群发消息*/
+		function sendMessage() {
+        var message = $('#msg').val();
+        $('#msg').val('');
+        socket.emit('chatevent', {userName: userName, message: message});
+		}
+
+    /**解析和输出其他客户端或服务端发送的消息*/
+		function output(message) {
+       var currentTime = "<span class='time'>" +  moment().format('HH:mm:ss.SSS') + "</span>";
+       var element = $("<div>" + currentTime + " " + message + "</div>");
+			$('#console').prepend(element);
+		}
+
+    function init(){
+    /*初始化订阅通道**/
+		 unsubscibe();
+		 socket.off("totalLog");
+		 socketConnect();
+		 onDisconnect();
+		 subscibe();
+		 subTotalLog();
+    	
+    }
+    
+    init();
+    
+    function resconnect () {
+    	try {
+    		/**先断开连接*/
+    		sendDisconnect();
+    	} catch (e) {
+    		
+    	}
+    	socket.connect();
+    }
+    
+    /**J监听键盘回车键*/
+   $(document).keydown(function(e){
+        if(e.keyCode == 13) {
+          $('#send').click();
+         }
+        });
+	</script>
+</head>
+
+<body>
+
+	<h1>ES网络安全威胁监控</h1>
+	<div id="userId" style="font-size: 20px;">  </div><br>
+  <div id="title" style="color: red;font-size: 25px;font-weight: 800;">  </div>
+
+	<br/>
+  
+	<div id="console" class="well">
+	</div>
+
+        <form class="well form-inline" onsubmit="return false;">
+           <input id="msg" class="input-xlarge" type="text" placeholder="广播消息..."/>
+           <button type="button" onClick="sendMessage()" class="btn" id="send">发送数据</button>
+           <button type="button" onClick="sendDisconnect()" class="btn">断开连接</button>
+           <button type="button" onClick="resconnect()" class="btn">重新建立连接</button>
+           <button type="button" onClick="unsubscibe()" class="btn">取消订阅攻击详情</button>
+           <button type="button" onClick="subscibe()" class="btn">订阅攻击详情</button>
+           
+        </form>
+
+
+
+</body>
+
+</html>
